@@ -1,0 +1,18 @@
+{
+  "observation": {
+    "robot": {
+      "joints": {"type": "STATE", "shape": [7]},
+      "image.side": {"type": "VISUAL", "shape": [3, 480, 640]},
+      "image.wrist": {"type": "VISUAL", "shape": [3, 480, 640]}
+    },
+    "human": {
+      "mano.hand_pose": {"type": "STATE", "shape": [15, 3]},
+      "mano.global_orient": {"type": "STATE", "shape": [3]},
+      "kp3d": {"type": "STATE", "shape": [21, 3]}
+    },
+    "shared": {
+      "image.low": {"type": "VISUAL", "shape": [3, 480, 640]},
+      "cam.pose": {"type": "STATE", "shape": [6]}
+    }
+  }
+}

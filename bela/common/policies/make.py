@@ -11,6 +11,7 @@ from rich.pretty import pprint
 import torch
 import tyro
 
+from bela.common.datasets.util import load_dataspec
 from bela.typ import Head, HeadSpec, Morph
 
 
@@ -35,27 +36,7 @@ from bela.common.policies.bela import BELAPolicy
 
 
 def make_policy():
-    batchspec = {
-        "observation": {
-            "robot": {
-                "joints": PolicyFeature(FeatureType.STATE, (7,)),
-                "image.side": PolicyFeature(FeatureType.VISUAL, (3, 480, 640)),
-                "image.wrist": PolicyFeature(FeatureType.VISUAL, (3, 480, 640)),
-                # "pose": PolicyFeature(FeatureType.STATE, (6,)),
-                # "gripper": PolicyFeature(FeatureType.STATE, (1,)),
-            },
-            "human": {
-                # "gripper": PolicyFeature(FeatureType.STATE, (1,)),
-                "mano.hand_pose": PolicyFeature(FeatureType.STATE, (15, 3)),  # (15, 3, 3)),
-                "mano.global_orient": PolicyFeature(FeatureType.STATE, (3,)),  # (3, 3)),
-                "kp3d": PolicyFeature(FeatureType.STATE, (21, 3)),
-            },
-            "shared": {
-                "image.low": PolicyFeature(FeatureType.VISUAL, (3, 480, 640)),
-                "cam.pose": PolicyFeature(FeatureType.STATE, (6,)),
-            },
-        },
-    }
+    batchspec = load_dataspec()
 
     def flatten_state_feat(x):
         if x.type == FeatureType.STATE:
