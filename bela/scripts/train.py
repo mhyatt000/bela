@@ -26,7 +26,6 @@ from lerobot.common.utils.wandb_utils import WandBLogger
 from lerobot.configs.default import DatasetConfig, WandBConfig
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
-from lerobot.configs.types import FeatureType, PolicyFeature
 from lerobot.scripts.eval import eval_policy
 
 #
@@ -39,7 +38,7 @@ from torch.utils.data.distributed import DistributedSampler
 import tyro
 
 import bela
-from bela.common.datasets.util import DataStats, postprocess
+from bela.common.datasets.util import DataStats, load_dataspec, postprocess
 import bela.train_tools as tt
 from bela.util import spec
 
@@ -138,27 +137,7 @@ def main(cfg: MyTrainConfig):
 
         # dataset = bela.common.dataset.make_dataset(cfg)  # dataset = make_dataset(cfg)
 
-        batchspec = {
-            "observation": {
-                "robot": {
-                    "joints": PolicyFeature(FeatureType.STATE, (7,)),
-                    "image.side": PolicyFeature(FeatureType.VISUAL, (3, 480, 640)),
-                    "image.wrist": PolicyFeature(FeatureType.VISUAL, (3, 480, 640)),
-                    # "pose": PolicyFeature(FeatureType.STATE, (6,)),
-                    "gripper": PolicyFeature(FeatureType.STATE, (1,)),
-                },
-                "human": {
-                    # "gripper": PolicyFeature(FeatureType.STATE, (1,)),
-                    "mano.hand_pose": PolicyFeature(FeatureType.STATE, (15, 3)),  # (15, 3, 3)),
-                    # "mano.global_orient": PolicyFeature( FeatureType.STATE, (3,)),  # (3, 3)),
-                    "kp3d": PolicyFeature(FeatureType.STATE, (21, 3)),
-                },
-                "shared": {
-                    "image.low": PolicyFeature(FeatureType.VISUAL, (3, 480, 640)),
-                    "cam.pose": PolicyFeature(FeatureType.STATE, (6,)),
-                },
-            },
-        }
+        batchspec = load_dataspec()
         batchspec = flatten_dict(batchspec, sep=".")
         sharespec = {k: v for k, v in batchspec.items() if k.startswith("observation.shared")}
 

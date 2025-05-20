@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
+import json
 import logging
 from pathlib import Path
 
 import jax
+from lerobot.configs.types import FeatureType, PolicyFeature
 from pytorch3d.transforms import matrix_to_rotation_6d
 import torch
 from tqdm import tqdm
@@ -37,6 +39,22 @@ class DataStats:
         if not self.stats:
             self.compute(dataset, batchspec)
         return self.stats
+
+
+def load_dataspec(filename: str = "dataspec.json") -> dict:
+    """Load a dataspec JSON from :data:`bela.ROOT`."""
+    path = Path(bela.ROOT) / filename
+    with path.open() as f:
+        data = json.load(f)
+
+    def parse(node):
+        if isinstance(node, dict) and "type" in node and "shape" in node:
+            return PolicyFeature(FeatureType[node["type"]], tuple(node["shape"]))
+        if isinstance(node, dict):
+            return {k: parse(v) for k, v in node.items()}
+        return node
+
+    return parse(data)
 
 
 def postprocess(batch, batchspec, head, flat=True):
