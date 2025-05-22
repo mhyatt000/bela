@@ -18,6 +18,8 @@ cam2base = torch.Tensor(np.load(str(BASE / "base.npz"))["base"])
 
 @dataclass
 class DataStats:
+    """Lightweight container for per-head dataset statistics."""
+
     head: str
     stats: dict[str, dict[str, torch.Tensor]] = field(default_factory=lambda: {})
 
@@ -176,36 +178,40 @@ def postprocess(batch, batchspec, head, flat=True):
     return batch
 
 
-def compute_stats(dataset, batchspec, head):
-    """Compute statistics for normalization
-    you need separate stats for actions even with shared heads
-    """
+def _collect_samples(ds, spec, head, n=100):
+    """Return a list of preprocessed samples."""
 
-    stats, data = {}, []
-    samples = list(range(len(dataset)))[:100]
-    for i in tqdm(samples, total=len(samples), desc="Computing stats", leave=False):
-        d = dataset[i]
-        d.pop("task")
-        d = jax.tree.map(lambda x: x.unsqueeze(0), d)
-        d = postprocess(d, batchspec, head=head)
-        d.pop("heads")
-        data.append(d)
+    samples = []
+    for i in tqdm(range(min(len(ds), n)), total=min(len(ds), n), desc="Computing stats", leave=False):
+        sample = ds[i]
+        sample.pop("task")
+        sample = jax.tree.map(lambda x: x.unsqueeze(0), sample)
+        sample = postprocess(sample, spec, head=head)
+        sample.pop("heads")
+        samples.append(sample)
+    return samples
+
+
+def compute_stats(dataset, spec, head):
+    """Compute statistics for normalization."""
+
+    data = _collect_samples(dataset, spec, head)
     data = jax.tree.map(lambda *x: torch.concatenate((x)), data[0], *data[1:])
-    data.pop("action_is_pad")  # doesnt need stats
+    data.pop("action_is_pad")
 
-    def make_stat(stack):
+    def make_stat(arr):
         return {
-            "mean": stack.mean(dim=0),
-            "std": stack.std(dim=0),
-            "max": stack.max(dim=0)[0],
-            "min": stack.min(dim=0)[0],
-            "count": stack.shape[0],
+            "mean": arr.mean(dim=0),
+            "std": arr.std(dim=0),
+            "max": arr.max(dim=0)[0],
+            "min": arr.min(dim=0)[0],
+            "count": arr.shape[0],
         }
 
     def take_act(k, v):
         y = k[0].key.startswith("action") and isinstance(v, torch.Tensor)
         return v[0] if y else v
 
-    stats = jax.tree.map(lambda x: make_stat(x), data)
+    stats = jax.tree.map(lambda t: make_stat(t), data)
     stats = jax.tree.map_with_path(take_act, stats)
     return stats

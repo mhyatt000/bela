@@ -45,6 +45,7 @@ import tyro
 import bela
 from bela.common.datasets.util import DataStats, postprocess
 import bela.train_tools as tt
+from bela.training import Trainer
 from bela.typ import PolicyFeature
 from bela.util import spec
 
@@ -71,6 +72,8 @@ class BELAConfig(ACTConfig):
 
 @dataclass
 class MyTrainConfig(TrainPipelineConfig):
+    """Training configuration with dataset and policy options."""
+
     dataset: DatasetConfig = field(default_factory=lambda: DatasetConfig(repo_id="none"))
     human_repos: list[str] = field(default_factory=list)
     human_revisions: list[str] = field(default_factory=list)  # branch
@@ -114,23 +117,26 @@ def main(cfg: MyTrainConfig):
 
     pprint(cfg)
 
-    # Initialize distributed environment (required for torchrun)
-    is_distributed, rank, world_size, device = tt.setup_distributed()
-    if not is_distributed:
-        logging.warning("Not running in distributed mode.")
-        rank = 0
-        world_size = 1
-        device = get_safe_torch_device(cfg.policy.device, log=True)
-
-    # Configure logging for each process
-    if rank != 0:
-        # Disable verbose logging for non-master processes
-        logging.getLogger().setLevel(logging.WARNING)
-
     try:
-        cfg.validate()
-        if rank == 0:
-            logging.info(pformat(cfg.to_dict()))
+        with tt.distributed_context() as (
+            is_distributed,
+            rank,
+            world_size,
+            device,
+        ):
+            if not is_distributed:
+                logging.warning("Not running in distributed mode.")
+                rank = 0
+                world_size = 1
+                device = get_safe_torch_device(cfg.policy.device, log=True)
+
+            # Configure logging for each process
+            if rank != 0:
+                logging.getLogger().setLevel(logging.WARNING)
+
+            cfg.validate()
+            if rank == 0:
+                logging.info(pformat(cfg.to_dict()))
 
         # Initialize wandb only on the main process
         wandb_logger = None
@@ -258,6 +264,8 @@ def main(cfg: MyTrainConfig):
                 logging.info("DDP enabled with unused parameter detection")
 
         grad_scaler = GradScaler(device.type, enabled=cfg.policy.use_amp)
+
+        trainer = Trainer(policy, optimizer, grad_scaler, lr_scheduler)
 
         step = 0  # number of policy updates (forward + backward + optim)
 
@@ -418,14 +426,10 @@ def main(cfg: MyTrainConfig):
                     if isinstance(batch[key], torch.Tensor):
                         batch[key] = batch[key].to(device, non_blocking=True)
 
-            train_tracker, output_dict = tt.update_policy_multi(
+            train_tracker, output_dict = trainer.update_multi(
                 train_tracker,
-                policy,
                 batches,
-                optimizer,
                 cfg.optimizer.grad_clip_norm,
-                grad_scaler=grad_scaler,
-                lr_scheduler=lr_scheduler,
                 use_amp=cfg.policy.use_amp,
                 lock=optimizer_lock,
             )
@@ -571,16 +575,11 @@ def main(cfg: MyTrainConfig):
         if eval_env:
             eval_env.close()
 
-        if is_distributed:
-            tt.cleanup_distributed()
-
         if rank == 0:
             logging.info("End of distributed training")
 
     except Exception as e:
         logging.error(f"Error during training: {e}")
-        if is_distributed:
-            tt.cleanup_distributed()
         raise
 
 
