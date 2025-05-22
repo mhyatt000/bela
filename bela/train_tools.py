@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 import logging
 import os
 import time
@@ -56,6 +56,18 @@ def cleanup_distributed() -> None:
     """Destroy the process group if initialized."""
     if dist.is_initialized():
         dist.destroy_process_group()
+
+
+@contextmanager
+def distributed_context():
+    """Context manager that sets up distributed mode."""
+
+    is_dist, rank, world_size, device = setup_distributed()
+    try:
+        yield is_dist, rank, world_size, device
+    finally:
+        if is_dist:
+            cleanup_distributed()
 
 
 # ---- training --------------------------------------------------------------
@@ -132,9 +144,7 @@ def update_policy_multi(
 
     grad_scaler.scale(loss).backward()
     grad_scaler.unscale_(optimizer)
-    grad_norm = torch.nn.utils.clip_grad_norm_(
-        policy.parameters(), grad_clip_norm, error_if_nonfinite=False
-    )
+    grad_norm = torch.nn.utils.clip_grad_norm_(policy.parameters(), grad_clip_norm, error_if_nonfinite=False)
     _step_optimizer(optimizer, grad_scaler, lock)
     if lr_scheduler is not None:
         lr_scheduler.step()

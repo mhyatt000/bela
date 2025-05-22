@@ -14,6 +14,8 @@ class Morph(str, Enum):
 
 @dataclass
 class Head:
+    """Specifies the morph and flattened shape of a data head."""
+
     morph: Morph | None
     shape: tuple
 
@@ -32,6 +34,8 @@ class Head:
 
 @dataclass
 class PolicyFeature(_PolicyFeature):
+    """Description of a feature used by a policy."""
+
     type: FeatureType
     shape: tuple
 
@@ -42,6 +46,8 @@ class PolicyFeature(_PolicyFeature):
 
 @dataclass
 class HeadSpec:
+    """Shapes for robot, human and shared features."""
+
     robot: Head | None = None
     human: Head | None = None
     share: Head | None = None
